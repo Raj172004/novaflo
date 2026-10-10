@@ -1,0 +1,15 @@
+export const sitePages = [
+  { path: "/", name: "Home" },
+  { path: "/about", name: "About" },
+  { path: "/services", name: "Services" },
+  { path: "/how-it-works", name: "How It Works" },
+  { path: "/industries", name: "Industries" },
+  { path: "/insights", name: "Insights" },
+  { path: "/faqs", name: "FAQs" },
+  { path: "/contact", name: "Contact" },
+  { path: "/growth-call", name: "Book a Growth Call" },
+  { path: "/business-owners", name: "For Business Owners" },
+  { path: "/privacy-policy", name: "Privacy Policy" },
+  { path: "/terms-and-conditions", name: "Terms and Conditions" },
+  { path: "/disclaimer", name: "Disclaimer" },
+];
