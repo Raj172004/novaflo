@@ -17,15 +17,38 @@ function getFirebaseAdminApp() {
 
   let serviceAccount: Record<string, unknown>;
 
-  if (serviceAccountJson) {
-    serviceAccount = JSON.parse(serviceAccountJson);
-  } else if (serviceAccountPath) {
-    serviceAccount = JSON.parse(
-      readFileSync(serviceAccountPath, "utf8"),
-    );
-  } else {
+  try {
+    if (serviceAccountJson?.trim()) {
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } else if (serviceAccountPath?.trim()) {
+      serviceAccount = JSON.parse(
+        readFileSync(serviceAccountPath, "utf8"),
+      );
+    } else {
+      throw new Error(
+        "Configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH.",
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Configure FIREBASE_SERVICE_ACCOUNT")
+    ) {
+      throw error;
+    }
+
     throw new Error(
-      "Configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH.",
+      "Firebase Admin credentials could not be loaded. Check the JSON format and service-account file path.",
+    );
+  }
+
+  if (
+    typeof serviceAccount.project_id !== "string" ||
+    typeof serviceAccount.client_email !== "string" ||
+    typeof serviceAccount.private_key !== "string"
+  ) {
+    throw new Error(
+      "Firebase Admin credentials are missing project_id, client_email, or private_key.",
     );
   }
 
