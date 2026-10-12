@@ -55,10 +55,12 @@ export async function POST(request: Request) {
     });
 
     // A CRM webhook failure should not undo a successfully saved lead.
-    await forwardToWebhook(lead);
-    await sendLeadNotification(lead);
+await Promise.all([
+  forwardToWebhook(lead),
+  sendLeadNotification(lead),
+]);
 
-    return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
+return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
   } catch (error) {
     console.error("Contact lead submission failed:", error);
 

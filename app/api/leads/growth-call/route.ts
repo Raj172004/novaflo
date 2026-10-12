@@ -57,10 +57,12 @@ export async function POST(request: Request) {
       utm: attribution.utm,
     });
 
-    await forwardToWebhook(lead);
-    await sendLeadNotification(lead);
+    await Promise.all([
+  forwardToWebhook(lead),
+  sendLeadNotification(lead),
+]);
 
-    return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
+return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
   } catch (error) {
     console.error("Growth-call submission failed:", error);
 
