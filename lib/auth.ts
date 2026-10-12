@@ -1,62 +1,82 @@
+
 import "server-only";
-import { createHmac, timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-/**
- * Server-side admin authentication.
- * Enabled only when ADMIN_PASSWORD is set. The session cookie is an HMAC
- * of the password signed with LEADS_SECRET (or a derived fallback).
- */
-
 export const ADMIN_COOKIE = "nv_admin";
-const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 
 function signingSecret(): string {
-  return (
-    process.env.LEADS_SECRET?.trim() ||
-    `nv-fallback::${process.env.ADMIN_PASSWORD?.trim() || "none"}`
-  );
-}
+  const secret = process.env.LEADS_SECRET?.trim();
 
-function expectedToken(): string {
-  return createHmac("sha256", signingSecret())
-    .update(`admin:${process.env.ADMIN_PASSWORD?.trim()}`)
-    .digest("hex");
-}
+  if (!secret || secret.length < 32) {
+    throw new Error("LEADS_SECRET must contain at least 32 characters.");
+  }
 
-export function adminEnabled(): boolean {
-  return Boolean(process.env.ADMIN_PASSWORD?.trim());
+  return secret;
 }
 
 function safeEqual(a: string, b: string): boolean {
-  const ba = Buffer.from(a);
-  const bb = Buffer.from(b);
-  return ba.length === bb.length && timingSafeEqual(ba, bb);
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+export function adminEnabled(): boolean {
+  return Boolean(
+    process.env.ADMIN_PASSWORD?.trim() &&
+    process.env.LEADS_SECRET?.trim() &&
+    process.env.LEADS_SECRET.trim().length >= 32
+  );
 }
 
 export function verifyPassword(input: string): boolean {
-  const expected = process.env.ADMIN_PASSWORD?.trim();
+  const expected = process.env.ADMIN_PASSWORD;
   if (!expected) return false;
-  return safeEqual(input.trim(), expected);
+
+  return safeEqual(input, expected);
 }
 
 export function createSessionValue(): string {
-  const payload = String(Date.now() + SESSION_TTL_MS);
-  const sig = createHmac("sha256", signingSecret()).update(payload).digest("hex");
-  return `${payload}.${sig}`;
+  const expiresAt = String(Date.now() + SESSION_TTL_MS);
+  const signature = createHmac("sha256", signingSecret())
+    .update(expiresAt)
+    .digest("hex");
+
+  return `${expiresAt}.${signature}`;
 }
 
 export function isValidSession(value: string | undefined): boolean {
   if (!value) return false;
-  const [payload, sig] = value.split(".");
-  if (!payload || !sig) return false;
-  const expectedSig = createHmac("sha256", signingSecret()).update(payload).digest("hex");
-  if (!safeEqual(sig, expectedSig)) return false;
-  return Number(payload) > Date.now();
+
+  const separator = value.indexOf(".");
+  if (separator <= 0) return false;
+
+  const expiresAt = value.slice(0, separator);
+  const signature = value.slice(separator + 1);
+
+  if (!/^\d+$/.test(expiresAt) || !/^[a-f0-9]{64}$/.test(signature)) {
+    return false;
+  }
+
+  const expiry = Number(expiresAt);
+  if (!Number.isSafeInteger(expiry) || expiry <= Date.now()) return false;
+
+  try {
+    const expectedSignature = createHmac("sha256", signingSecret())
+      .update(expiresAt)
+      .digest("hex");
+
+    return safeEqual(signature, expectedSignature);
+  } catch {
+    return false;
+  }
 }
 
-/** Check the current request's admin session. Call from server components/routes. */
 export async function isAdminAuthenticated(): Promise<boolean> {
-  const store = await cookies();
-  return isValidSession(store.get(ADMIN_COOKIE)?.value);
+  if (!adminEnabled()) return false;
+
+  const cookieStore = await cookies();
+  return isValidSession(cookieStore.get(ADMIN_COOKIE)?.value);
 }

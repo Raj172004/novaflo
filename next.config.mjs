@@ -1,10 +1,21 @@
+
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /** @type {import('next').NextConfig} */
+const projectRoot = path.dirname(fileURLToPath(import.meta.url));
+
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+
+  // Keep Next.js build tracing inside the Novaflo project.
+  outputFileTracingRoot: projectRoot,
+
   images: {
     formats: ['image/avif', 'image/webp'],
   },
+
   async headers() {
     return [
       {
@@ -12,8 +23,14 @@ const nextConfig = {
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'X-Frame-Options', value: 'DENY' },
-          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          {
+            key: 'Referrer-Policy',
+            value: 'strict-origin-when-cross-origin',
+          },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=()',
+          },
         ],
       },
     ];
