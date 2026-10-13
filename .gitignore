@@ -34,3 +34,6 @@ server.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local service-account credentials
+/secrets/
