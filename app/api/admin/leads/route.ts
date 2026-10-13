@@ -1,8 +1,10 @@
-
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import { readLeads, updateLeadStatus } from "@/lib/leads";
 import { leadStatuses, type LeadStatus } from "@/lib/config";
+import { readJsonBody } from "../../../../lib/request-body";
+
+export const runtime = "nodejs";
 
 export async function GET() {
   if (!(await isAdminAuthenticated())) {
@@ -29,19 +31,30 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let body: { id?: unknown; status?: unknown };
+  const body = await readJsonBody(request);
 
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  if (!body.ok) {
+    return NextResponse.json(
+      { error: body.error },
+      { status: body.status },
+    );
   }
 
   if (
-    typeof body.id !== "string" ||
-    body.id.trim().length === 0 ||
-    typeof body.status !== "string" ||
-    !leadStatuses.includes(body.status as LeadStatus)
+    typeof body.value !== "object" ||
+    body.value === null ||
+    Array.isArray(body.value)
+  ) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const payload = body.value as Record<string, unknown>;
+
+  if (
+    typeof payload.id !== "string" ||
+    payload.id.trim().length === 0 ||
+    typeof payload.status !== "string" ||
+    !leadStatuses.includes(payload.status as LeadStatus)
   ) {
     return NextResponse.json(
       { error: "Invalid lead ID or status." },
@@ -51,8 +64,8 @@ export async function PATCH(request: Request) {
 
   try {
     const updated = await updateLeadStatus(
-      body.id.trim(),
-      body.status as LeadStatus,
+      payload.id.trim(),
+      payload.status as LeadStatus,
     );
 
     if (!updated) {

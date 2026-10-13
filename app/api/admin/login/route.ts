@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import {
   ADMIN_COOKIE,
@@ -9,6 +8,8 @@ import {
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60;
+const MAX_BODY_BYTES = 8 * 1024;
+const MAX_PASSWORD_LENGTH = 1024;
 
 export async function POST(request: Request) {
   if (!adminEnabled()) {
@@ -34,18 +35,67 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { password?: unknown };
+  const contentLength = request.headers.get("content-length");
+
+  if (
+    contentLength &&
+    (!/^\d+$/.test(contentLength) ||
+      Number(contentLength) > MAX_BODY_BYTES)
+  ) {
+    return NextResponse.json(
+      { error: "Request body is too large or invalid." },
+      { status: 413 },
+    );
+  }
+
+  let rawBody: string;
 
   try {
-    body = await request.json();
+    rawBody = await request.text();
   } catch {
     return NextResponse.json(
-      { error: "Invalid request." },
+      { error: "Unable to read request." },
       { status: 400 },
     );
   }
 
-  if (typeof body.password !== "string" || !verifyPassword(body.password)) {
+  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: "Request body is too large." },
+      { status: 413 },
+    );
+  }
+
+  let body: unknown;
+
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid JSON request." },
+      { status: 400 },
+    );
+  }
+
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    Array.isArray(body)
+  ) {
+    return NextResponse.json(
+      { error: "Invalid request body." },
+      { status: 400 },
+    );
+  }
+
+  const password = (body as Record<string, unknown>).password;
+
+  if (
+    typeof password !== "string" ||
+    password.length === 0 ||
+    password.length > MAX_PASSWORD_LENGTH ||
+    !verifyPassword(password)
+  ) {
     return NextResponse.json(
       { error: "Incorrect password." },
       { status: 401 },

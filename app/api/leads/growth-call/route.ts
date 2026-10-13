@@ -1,74 +1,99 @@
-
 import { NextResponse } from "next/server";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { validateGrowthCall } from "@/lib/validation";
-import { rateLimit, clientIp } from "@/lib/rate-limit";
-import { addLead, forwardToWebhook } from "@/lib/leads";
+import {
+  addLead,
+  forwardToWebhook,
+  type LeadRecord,
+} from "@/lib/leads";
 import { readAttribution } from "@/lib/attribution";
 import { sendLeadNotification } from "@/lib/email";
+import { readJsonBody } from "../../../../lib/request-body";
+
+export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   const ip = clientIp(request.headers);
-  const { allowed, retryAfterSeconds } = rateLimit(`gc:${ip}`, {
+
+  const limit = rateLimit(`gc:${ip}`, {
     max: 5,
     windowMs: 10 * 60 * 1000,
   });
 
-  if (!allowed) {
+  if (!limit.allowed) {
     return NextResponse.json(
-      { error: "Too many submissions. Please try again later." },
+      { ok: false, error: "Too many requests. Please try again later." },
       {
         status: 429,
-        headers: { "Retry-After": String(retryAfterSeconds) },
+        headers: {
+          "Retry-After": String(limit.retryAfterSeconds),
+        },
       },
     );
   }
 
-  let body: unknown;
+  const body = await readJsonBody(request);
 
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  if (!body.ok) {
+    return NextResponse.json(
+      { ok: false, error: body.error },
+      { status: body.status },
+    );
   }
 
-  const { errors, value } = validateGrowthCall(body);
+  const result = validateGrowthCall(body.value);
 
-  if (!value) {
-    return NextResponse.json({ errors }, { status: 400 });
+  if (!result.value || Object.keys(result.errors).length > 0) {
+    return NextResponse.json(
+      { ok: false, errors: result.errors },
+      { status: 400 },
+    );
   }
+
+  let lead: LeadRecord;
 
   try {
     const attribution = await readAttribution();
 
-    const lead = await addLead({
+    lead = await addLead({
+      name: result.value.name,
+      business: result.value.business,
+      email: result.value.email,
+      phone: result.value.phone,
+      industry: result.value.industry,
+      city: result.value.city,
+      instagram: result.value.instagram || undefined,
+      challenge: result.value.challenge,
+      message: result.value.message || undefined,
+      contactMethod: result.value.contactMethod,
       type: "growth_call",
-      name: value.name,
-      business: value.business,
-      phone: value.phone,
-      email: value.email,
-      industry: value.industry,
-      city: value.city,
-      instagram: value.instagram || undefined,
-      challenge: value.challenge,
-      message: value.message || undefined,
-      contactMethod: value.contactMethod,
-      source: attribution.source,
-      landingPage: attribution.landingPage,
-      utm: attribution.utm,
+      ...attribution,
     });
-
-    await Promise.all([
-  forwardToWebhook(lead),
-  sendLeadNotification(lead),
-]);
-
-return NextResponse.json({ ok: true, id: lead.id }, { status: 201 });
   } catch (error) {
-    console.error("Growth-call submission failed:", error);
+    console.error("Failed to save growth-call lead:", error);
 
     return NextResponse.json(
-      { error: "We couldn't submit your request right now. Please try again." },
+      { ok: false, error: "Unable to submit your request right now." },
       { status: 503 },
     );
   }
+
+  const integrations = await Promise.allSettled([
+    forwardToWebhook(lead),
+    sendLeadNotification(lead),
+  ]);
+
+  for (const integration of integrations) {
+    if (integration.status === "rejected") {
+      console.error(
+        "Growth-call lead integration failed:",
+        integration.reason,
+      );
+    }
+  }
+
+  return NextResponse.json(
+    { ok: true, id: lead.id },
+    { status: 201 },
+  );
 }
