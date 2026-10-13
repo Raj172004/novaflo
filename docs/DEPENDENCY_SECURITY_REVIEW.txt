@@ -1,0 +1,20 @@
+﻿NovaFlo Dependency Security Review
+Date: 2026-10-13 20:10:06
+
+Production audit:
+npm audit --omit=dev
+Result: 0 vulnerabilities reported.
+
+Framework versions:
+Next.js: 15.5.27
+Tailwind CSS: 3.4.19
+
+Full development dependency audit:
+5 high-severity findings reported in the braces/chokidar/fast-glob/micromatch dependency tree.
+
+Action:
+- Do not use npm audit fix --force.
+- Keep Tailwind CSS v3.
+- Investigate a compatible fix for the development dependency tree.
+- Re-run tests, typecheck, build, and audits after any dependency change.
+- Deployment remains on hold until final review and explicit approval.

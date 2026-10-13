@@ -37,3 +37,8 @@ next-env.d.ts
 
 # Local service-account credentials
 /secrets/
+# Local development backups and generated review reports
+/backups/
+/novaflo-quality-report.txt
+/novaflo-source-review.txt
+/npm-audit-report.json

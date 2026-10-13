@@ -1,15 +1,11 @@
-﻿
-import "server-only";
+﻿import "server-only";
 
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { readFileSync } from "node:fs";
 
 function getFirebaseAdminApp() {
-  const existingApp = getApps().find(
-    (app) => app.name === "[DEFAULT]",
-  );
-
+  const existingApp = getApps().find((app) => app.name === "[DEFAULT]");
   if (existingApp) return existingApp;
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
@@ -21,9 +17,7 @@ function getFirebaseAdminApp() {
     if (serviceAccountJson?.trim()) {
       serviceAccount = JSON.parse(serviceAccountJson);
     } else if (serviceAccountPath?.trim()) {
-      serviceAccount = JSON.parse(
-        readFileSync(serviceAccountPath, "utf8"),
-      );
+      serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf8"));
     } else {
       throw new Error(
         "Configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH.",
@@ -44,17 +38,26 @@ function getFirebaseAdminApp() {
 
   if (
     typeof serviceAccount.project_id !== "string" ||
+    !serviceAccount.project_id.trim() ||
     typeof serviceAccount.client_email !== "string" ||
-    typeof serviceAccount.private_key !== "string"
+    !serviceAccount.client_email.trim() ||
+    typeof serviceAccount.private_key !== "string" ||
+    !serviceAccount.private_key.trim()
   ) {
     throw new Error(
       "Firebase Admin credentials are missing project_id, client_email, or private_key.",
     );
   }
 
+  // Normalize private-key newlines supplied through environment variables.
+  const normalizedServiceAccount = {
+    ...serviceAccount,
+    private_key: serviceAccount.private_key.replace(/\\n/g, "\n"),
+  };
+
   return initializeApp({
     credential: cert(
-      serviceAccount as Parameters<typeof cert>[0],
+      normalizedServiceAccount as Parameters<typeof cert>[0],
     ),
   });
 }

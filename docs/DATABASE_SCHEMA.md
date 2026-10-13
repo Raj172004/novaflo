@@ -1,8 +1,7 @@
 # NOVAFLO — Database Schema (Future)
 
-The site runs today on zero-database JSON storage (`lib/leads.ts`). When a database is added
-(Postgres/Supabase/PlanetScale/SQLite), migrate `lib/leads.ts` behind the same interface and use
-this schema. Relationships are FK-first; secrets are never stored in the database.
+The site currently uses Firebase Firestore through `lib/leads.ts`. If migrating to another database (Postgres/Supabase/PlanetScale/SQLite), preserve the lead-service interface and keep API routes independent of database details.
+Use this schema for the relational database design. Relationships are FK-first; secrets are never stored in the database.
 
 ## Tables
 
@@ -145,7 +144,7 @@ Merged into `leads` (type = `contact`) — kept as a view for admin filtering.
 ## Migration notes
 
 1. `lib/leads.ts` interface is intentionally tiny: `readLeads`, `addLead`, `updateLeadStatus`,
-   `forwardToWebhook`. Swap the fs implementation for DB calls; API routes stay unchanged.
+   `forwardToWebhook`. The current implementation uses Firestore. Preserve the lead-service interface when refactoring; API routes should remain independent of database details.
 2. Attribution columns are denormalized onto `leads` on purpose — lead source reporting stays a
    single-table query.
 3. The admin session model (`lib/auth.ts`) already supports swapping to `users` table auth.
