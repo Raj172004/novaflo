@@ -1,4 +1,4 @@
-﻿import "server-only";
+import "server-only";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 
@@ -27,7 +27,7 @@ const leadsCollection = () => adminDb.collection("leads");
 
 function toLeadRecord(
   id: string,
-  data: FirebaseFirestore.DocumentData
+  data: FirebaseFirestore.DocumentData,
 ): LeadRecord {
   return {
     ...data,
@@ -35,7 +35,8 @@ function toLeadRecord(
     createdAt:
       typeof data.createdAt === "string"
         ? data.createdAt
-        : data.createdAt?.toDate?.()?.toISOString?.() ?? new Date(0).toISOString(),
+        : data.createdAt?.toDate?.()?.toISOString?.() ??
+          new Date(0).toISOString(),
   } as LeadRecord;
 }
 
@@ -45,7 +46,7 @@ export async function readLeads(): Promise<LeadRecord[]> {
 }
 
 export async function addLead(
-  lead: Omit<LeadRecord, "id" | "createdAt" | "status">
+  lead: Omit<LeadRecord, "id" | "createdAt" | "status">,
 ): Promise<LeadRecord> {
   const record = {
     ...lead,
@@ -53,9 +54,15 @@ export async function addLead(
     status: "new" as const,
   };
 
+  // Firestore does not accept undefined field values.
+  const firestoreRecord = Object.fromEntries(
+    Object.entries(record).filter(([, value]) => value !== undefined),
+  );
+
   const docRef = leadsCollection().doc();
+
   await docRef.set({
-    ...record,
+    ...firestoreRecord,
     id: docRef.id,
     createdAt: FieldValue.serverTimestamp(),
   });
@@ -68,7 +75,7 @@ export async function addLead(
 
 export async function updateLeadStatus(
   id: string,
-  status: LeadRecord["status"]
+  status: LeadRecord["status"],
 ): Promise<boolean> {
   const docRef = leadsCollection().doc(id);
   const snapshot = await docRef.get();
@@ -96,5 +103,42 @@ export async function forwardToWebhook(lead: LeadRecord): Promise<void> {
     }
   } catch (error) {
     console.error("Lead webhook forwarding failed:", error);
+  }
+}
+
+/** Forward a newly created lead to the optional Google Sheets receiver. */
+export async function forwardToGoogleSheets(
+  lead: LeadRecord,
+): Promise<void> {
+  const url = process.env.GOOGLE_SHEETS_WEBHOOK_URL?.trim();
+  const secret = process.env.GOOGLE_SHEETS_WEBHOOK_SECRET?.trim();
+
+  // Google Sheets integration remains optional until configured.
+  if (!url || !secret) return;
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        event: "lead.created",
+        secret,
+        lead,
+      }),
+      signal: AbortSignal.timeout(8000),
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      console.error(
+        "Google Sheets integration returned HTTP",
+        response.status,
+      );
+    }
+  } catch (error) {
+    // A Sheets outage must not invalidate a lead already saved in Firestore.
+    console.error("Google Sheets forwarding failed:", error);
   }
 }

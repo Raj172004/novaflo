@@ -186,13 +186,52 @@ describe("lead service", () => {
         id: "generated-lead-id",
         status: "new",
       });
+
       expect(Number.isNaN(Date.parse(result.createdAt))).toBe(false);
+    });
+
+    it("omits undefined optional fields from Firestore writes", async () => {
+      const leadWithOptionalFields = {
+        ...sampleLead,
+        industry: undefined,
+        city: undefined,
+        instagram: undefined,
+        challenge: undefined,
+        subject: undefined,
+        message: undefined,
+        landingPage: undefined,
+      };
+
+      await addLead(leadWithOptionalFields);
+
+      const savedDocument = mocks.docSet.mock.calls[0][0];
+
+      for (const field of [
+        "industry",
+        "city",
+        "instagram",
+        "challenge",
+        "subject",
+        "message",
+        "landingPage",
+      ]) {
+        expect(savedDocument).not.toHaveProperty(field);
+      }
+
+      expect(savedDocument).toMatchObject({
+        name: sampleLead.name,
+        email: sampleLead.email,
+        id: "generated-lead-id",
+        status: "new",
+      });
     });
 
     it("propagates database write failures", async () => {
       mocks.docSet.mockRejectedValue(new Error("Firestore write failed"));
 
-      await expect(addLead(sampleLead)).rejects.toThrow("Firestore write failed");
+      await expect(addLead(sampleLead)).rejects.toThrow(
+        "Firestore write failed",
+      );
     });
   });
 

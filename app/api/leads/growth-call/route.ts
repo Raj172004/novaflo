@@ -4,8 +4,9 @@ import { validateGrowthCall } from "@/lib/validation";
 import {
   addLead,
   forwardToWebhook,
-  type LeadRecord,
+  forwardToGoogleSheets,
 } from "@/lib/leads";
+import type { LeadRecord } from "@/lib/leads";
 import { readAttribution } from "@/lib/attribution";
 import { sendLeadNotification } from "@/lib/email";
 import { readJsonBody } from "../../../../lib/request-body";
@@ -22,7 +23,10 @@ export async function POST(request: Request) {
 
   if (!limit.allowed) {
     return NextResponse.json(
-      { ok: false, error: "Too many requests. Please try again later." },
+      {
+        ok: false,
+        error: "Too many submissions. Please try again later.",
+      },
       {
         status: 429,
         headers: {
@@ -56,37 +60,43 @@ export async function POST(request: Request) {
     const attribution = await readAttribution();
 
     lead = await addLead({
+      type: "growth_call",
       name: result.value.name,
       business: result.value.business,
-      email: result.value.email,
       phone: result.value.phone,
+      email: result.value.email,
       industry: result.value.industry,
       city: result.value.city,
       instagram: result.value.instagram || undefined,
       challenge: result.value.challenge,
       message: result.value.message || undefined,
       contactMethod: result.value.contactMethod,
-      type: "growth_call",
-      ...attribution,
+      source: attribution.source,
+      landingPage: attribution.landingPage,
+      utm: attribution.utm,
     });
   } catch (error) {
     console.error("Failed to save growth-call lead:", error);
 
     return NextResponse.json(
-      { ok: false, error: "Unable to submit your request right now." },
+      {
+        ok: false,
+        error: "Unable to submit your request right now.",
+      },
       { status: 503 },
     );
   }
 
   const integrations = await Promise.allSettled([
     forwardToWebhook(lead),
+    forwardToGoogleSheets(lead),
     sendLeadNotification(lead),
   ]);
 
   for (const integration of integrations) {
     if (integration.status === "rejected") {
       console.error(
-        "Growth-call lead integration failed:",
+        "Growth-call integration failed:",
         integration.reason,
       );
     }

@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { clientIp, rateLimit } from "@/lib/rate-limit";
 import { validateContact } from "@/lib/validation";
-import { addLead, forwardToWebhook } from "@/lib/leads";
+import {
+  addLead,
+  forwardToWebhook,
+  forwardToGoogleSheets,
+} from "@/lib/leads";
 import { readAttribution } from "@/lib/attribution";
 import { sendLeadNotification } from "@/lib/email";
 import { readJsonBody } from "../../../../lib/request-body";
@@ -18,7 +22,10 @@ export async function POST(request: Request) {
 
   if (!limit.allowed) {
     return NextResponse.json(
-      { ok: false, error: "Too many requests. Please try again later." },
+      {
+        ok: false,
+        error: "Too many requests. Please try again later.",
+      },
       {
         status: 429,
         headers: {
@@ -52,27 +59,27 @@ export async function POST(request: Request) {
     const attribution = await readAttribution();
 
     lead = await addLead({
-      name: result.value.name,
-      business: result.value.business,
-      email: result.value.email,
-      phone: result.value.phone,
-      subject: result.value.subject,
-      message: result.value.message,
-      contactMethod: result.value.contactMethod,
-      type: "contact",
+      ...result.value,
       ...attribution,
+      type: "contact",
     });
   } catch (error) {
     console.error("Failed to save contact lead:", error);
 
     return NextResponse.json(
-      { ok: false, error: "Unable to submit your request right now." },
+      {
+        ok: false,
+        error: "Unable to submit your request right now.",
+      },
       { status: 503 },
     );
   }
 
+  // Firestore is the primary store. Integration failures must not
+  // turn an already-saved lead into a failed form submission.
   const integrations = await Promise.allSettled([
     forwardToWebhook(lead),
+    forwardToGoogleSheets(lead),
     sendLeadNotification(lead),
   ]);
 

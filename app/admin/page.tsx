@@ -302,11 +302,18 @@ export default function AdminPage() {
         <div>
           <h1 className="font-display text-2xl font-bold">Leads</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {leads.length} total · private lead management
+            {leads.length} total Â· private lead management
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <a
+            href="/admin/content"
+            className="rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-medium text-cyan-300 hover:bg-cyan-400/10"
+          >
+            Manage Content
+          </a>
+
           <button
             type="button"
             onClick={() => void loadLeads()}
@@ -415,15 +422,15 @@ export default function AdminPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-white">
-                    {lead.name} ·{" "}
+                    {lead.name} Â·{" "}
                     <span className="font-normal text-slate-300">
                       {lead.business}
                     </span>
                   </p>
 
                   <p className="mt-0.5 truncate text-sm text-slate-500">
-                    {lead.email} · {lead.phone}
-                    {lead.city ? ` · ${lead.city}` : ""}
+                    {lead.email} Â· {lead.phone}
+                    {lead.city ? ` Â· ${lead.city}` : ""}
                   </p>
                 </div>
 
@@ -460,7 +467,7 @@ export default function AdminPage() {
                         "UTM",
                         Object.keys(lead.utm ?? {}).length
                           ? JSON.stringify(lead.utm)
-                          : "—",
+                          : "â€”",
                       ],
                       [
                         "Received",
@@ -473,7 +480,7 @@ export default function AdminPage() {
                         </dt>
 
                         <dd className="mt-0.5 break-words text-slate-300">
-                          {value ? String(value) : "—"}
+                          {value ? String(value) : "â€”"}
                         </dd>
                       </div>
                     ))}
