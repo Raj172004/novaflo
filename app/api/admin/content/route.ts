@@ -1,4 +1,4 @@
-﻿
+
 import { NextResponse } from "next/server";
 import { isAdminAuthenticated } from "@/lib/auth";
 import {
@@ -17,6 +17,7 @@ type ContentInput = {
   slug: string;
   title: string;
   excerpt: string;
+  category: string;
   body: string;
   published: boolean;
 };
@@ -41,6 +42,7 @@ function validInput(value: unknown): value is ContentInput {
     item.title.length <= 200 &&
     typeof item.excerpt === "string" &&
     item.excerpt.length <= 1000 &&
+    (item.category === undefined || (typeof item.category === "string" && item.category.length <= 80)) &&
     typeof item.body === "string" &&
     item.body.length <= 30000 &&
     typeof item.published === "boolean"
@@ -77,7 +79,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const input: ContentInput = parsed.value;
+  const input: ContentInput = {
+    ...parsed.value,
+    category: typeof parsed.value.category === "string" && parsed.value.category.trim() ? parsed.value.category.trim() : "General",
+  };
 
   try {
     const content = await listContent();
@@ -133,7 +138,10 @@ export async function PATCH(request: Request) {
     );
   }
 
-  const input: ContentInput = payload.content;
+  const input: ContentInput = {
+    ...payload.content,
+    category: typeof payload.content.category === "string" && payload.content.category.trim() ? payload.content.category.trim() : "General",
+  };
 
   try {
     const content = await listContent();

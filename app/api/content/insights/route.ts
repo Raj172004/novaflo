@@ -15,6 +15,7 @@ export async function GET() {
           slug: item.slug,
           title: item.title,
           excerpt: item.excerpt,
+          category: item.category || "General",
           body: item.body,
           date: item.createdAt || item.updatedAt,
         })),

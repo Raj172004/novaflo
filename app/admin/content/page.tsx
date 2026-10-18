@@ -9,6 +9,7 @@ type ContentForm = {
   slug: string;
   title: string;
   excerpt: string;
+  category: string;
   body: string;
   published: boolean;
 };
@@ -18,6 +19,7 @@ const emptyForm: ContentForm = {
   slug: "",
   title: "",
   excerpt: "",
+  category: "General",
   body: "",
   published: false,
 };
@@ -86,6 +88,7 @@ export default function AdminContentPage() {
       slug: item.slug,
       title: item.title,
       excerpt: item.excerpt,
+      category: item.category || "General",
       body: item.body,
       published: item.published,
     });
@@ -279,6 +282,19 @@ export default function AdminContentPage() {
           />
         </label>
 
+        {form.type === "insight" && (
+          <label className="block text-sm">
+            Category
+            <input
+              maxLength={80}
+              value={form.category}
+              onChange={(event) => setForm({ ...form, category: event.target.value })}
+              className="input-field mt-2"
+              placeholder="Strategy, Content, Growth..."
+            />
+          </label>
+        )}
+
         <label className="block text-sm">
           Body
           <textarea
@@ -327,7 +343,7 @@ export default function AdminContentPage() {
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{item.title}</p>
               <p className="mt-1 text-xs text-slate-400">
-                {item.type} · /{item.slug} · {item.published ? "Published" : "Draft"}
+                {item.type} · /{item.slug}{item.type === "insight" ? ` · ${item.category || "General"}` : ""} · {item.published ? "Published" : "Draft"}
               </p>
             </div>
             <button type="button" onClick={() => edit(item)} className="rounded-lg border border-white/15 px-3 py-2 text-sm">

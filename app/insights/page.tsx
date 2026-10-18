@@ -6,12 +6,12 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 import { Breadcrumb } from "@/components/ui/section-header";
 import { EmptyState } from "@/components/ui/empty-state";
-import { insightCategories } from "@/data/insights";
 
 type PublishedInsight = {
   slug: string;
   title: string;
   excerpt: string;
+  category: string;
   body: string;
   date: string;
 };
@@ -70,19 +70,25 @@ export default function InsightsPage() {
     return () => controller.abort();
   }, []);
 
+  const categories = useMemo(
+    () => ["All", ...Array.from(new Set(insights.map((post) => post.category?.trim() || "General"))).sort((a, b) => a.localeCompare(b))],
+    [insights],
+  );
+
   const filtered = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
 
     return insights.filter((post) => {
+      const matchesCategory = category === "All" || (post.category || "General") === category;
       const matchesQuery =
         !normalizedQuery ||
         post.title.toLowerCase().includes(normalizedQuery) ||
         post.excerpt.toLowerCase().includes(normalizedQuery) ||
         post.body.toLowerCase().includes(normalizedQuery);
 
-      return matchesQuery;
+      return matchesCategory && matchesQuery;
     });
-  }, [insights, query]);
+  }, [insights, query, category]);
 
   return (
     <>
@@ -159,7 +165,7 @@ export default function InsightsPage() {
                   role="group"
                   aria-label="Filter by category"
                 >
-                  {["All", ...insightCategories].map((item) => (
+                  {categories.map((item) => (
                     <button
                       key={item}
                       type="button"
@@ -185,7 +191,7 @@ export default function InsightsPage() {
                     className="surface-card surface-card-hover flex h-full flex-col p-6"
                   >
                     <p className="text-xs font-semibold uppercase tracking-wider text-accent-cyan">
-                      Insight
+                      {post.category || "General"}
                     </p>
                     <h2 className="mt-2.5 font-display text-lg font-semibold leading-snug">
                       {post.title}

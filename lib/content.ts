@@ -12,6 +12,7 @@ export interface SiteContent {
   slug: string;
   title: string;
   excerpt: string;
+  category: string;
   body: string;
   published: boolean;
   updatedAt: string;
@@ -43,6 +44,7 @@ function normalizeDocument(
     slug: data.slug,
     title: data.title,
     excerpt: data.excerpt ?? "",
+    category: typeof data.category === "string" && data.category.trim() ? data.category.trim() : "General",
     body: data.body ?? "",
     published: data.published === true,
     createdAt: dateValue(data.createdAt),
@@ -79,6 +81,7 @@ export async function saveContent(
     slug: input.slug,
     title: input.title,
     excerpt: input.excerpt,
+    category: input.category?.trim() || "General",
     body: input.body,
     published: input.published,
     updatedAt: now,

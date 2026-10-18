@@ -302,7 +302,7 @@ export default function AdminPage() {
         <div>
           <h1 className="font-display text-2xl font-bold">Leads</h1>
           <p className="mt-1 text-sm text-slate-500">
-            {leads.length} total Â· private lead management
+            {leads.length} total · private lead management
           </p>
         </div>
 
@@ -422,15 +422,15 @@ export default function AdminPage() {
               >
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold text-white">
-                    {lead.name} Â·{" "}
+                    {lead.name} ·{" "}
                     <span className="font-normal text-slate-300">
                       {lead.business}
                     </span>
                   </p>
 
                   <p className="mt-0.5 truncate text-sm text-slate-500">
-                    {lead.email} Â· {lead.phone}
-                    {lead.city ? ` Â· ${lead.city}` : ""}
+                    {lead.email} · {lead.phone}
+                    {lead.city ? ` · ${lead.city}` : ""}
                   </p>
                 </div>
 
