@@ -56,8 +56,8 @@ export async function listContent(): Promise<SiteContent[]> {
   const snapshot = await collection().get();
 
   return snapshot.docs
-    .map((doc) => normalizeDocument(doc.id, doc.data()))
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    .map((doc: any) => normalizeDocument(doc.id, doc.data()))
+    .sort((a: any, b: any) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 export async function getPublishedContent(
@@ -68,7 +68,7 @@ export async function getPublishedContent(
     .where("published", "==", true)
     .get();
 
-  return snapshot.docs.map((doc) => normalizeDocument(doc.id, doc.data()));
+  return snapshot.docs.map((doc: any) => normalizeDocument(doc.id, doc.data()));
 }
 
 export async function saveContent(
@@ -117,3 +117,6 @@ export async function deleteContent(id: string): Promise<boolean> {
   await ref.delete();
   return true;
 }
+
+
+

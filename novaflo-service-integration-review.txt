@@ -1,0 +1,521 @@
+
+===== lib/services.ts =====
+import "server-only";
+
+import { getPublishedContent } from "@/lib/content";
+import { services as staticServices, type Service } from "@/data/services";
+
+export async function getServices(): Promise<Service[]> {
+  let published;
+
+  try {
+    published = await getPublishedContent("service");
+  } catch (error) {
+    console.error("Unable to load CMS services; using static services.", error);
+    return staticServices;
+  }
+
+  const bySlug = new Map(published.map((item) => [item.slug, item]));
+
+  const existing = staticServices.map((service) => {
+    const item = bySlug.get(service.slug);
+    if (!item) return service;
+
+    return {
+      ...service,
+      name: item.title,
+      short: item.excerpt || service.short,
+      description: item.body || service.description,
+    };
+  });
+
+  const existingSlugs = new Set(staticServices.map((service) => service.slug));
+
+  const additional: Service[] = published
+    .filter((item) => !existingSlugs.has(item.slug))
+    .map((item) => ({
+      slug: item.slug,
+      path: `/services/${item.slug}`,
+      name: item.title,
+      short: item.excerpt || item.title,
+      description: item.body || item.excerpt || item.title,
+      includes: [],
+      outcome: "A service tailored to your business needs.",
+      icon: "compass",
+    }));
+
+  return [...existing, ...additional];
+}
+
+
+===== data/services.ts =====
+export interface Service {
+  slug: string; // "" for the /services hub listing card? use path
+  path: string;
+  name: string;
+  short: string;
+  description: string;
+  includes: string[];
+  outcome: string;
+  icon: string; // lucide icon key mapped in components
+}
+
+export const services: Service[] = [
+  {
+    slug: "social-media-strategy",
+    path: "/services/social-media-strategy",
+    name: "Social Media Strategy & Audit",
+    short: "Understand the business, customer, competitors and offer before anything is created.",
+    description:
+      "Every engagement begins with a structured audit of your business, audience and current presence â€” so content is planned around real customer decisions, not guesswork.",
+    includes: [
+      "Instagram profile review",
+      "Competitor review",
+      "Audience planning",
+      "Content pillars",
+      "Offer review",
+      "CTA review",
+      "Baseline metric review",
+    ],
+    outcome: "A clear content direction grounded in how your customers actually choose businesses like yours.",
+    icon: "compass",
+  },
+  {
+    slug: "instagram-management",
+    path: "/services/instagram-management",
+    name: "Instagram Management",
+    short: "A planned monthly calendar, published consistently, with a monthly review.",
+    description:
+      "Your Instagram is managed end to end: a monthly calendar you approve in advance, captions written in your brand voice, scheduling, publishing and a clear monthly review.",
+    includes: [
+      "Monthly content calendar",
+      "Caption writing",
+      "Scheduling",
+      "Publishing",
+      "Comment & enquiry guidance",
+      "Monthly review",
+    ],
+    outcome: "A consistent, professional presence â€” without the daily pressure of deciding what to post.",
+    icon: "calendar",
+  },
+  {
+    slug: "content-production",
+    path: "/services/content-production",
+    name: "Premium Content Production",
+    short: "Reels, carousels and posts designed around business goals â€” not trends for their own sake.",
+    description:
+      "Concepts, scripts, filming direction and professional editing for content that reflects the real quality of your business: educational, proof-driven and trust-building.",
+    includes: [
+      "Reel concepts",
+      "Scripts",
+      "Founder & team video direction",
+      "Professional editing",
+      "Carousels",
+      "Static posts",
+      "Educational content",
+      "Proof content",
+      "Service content",
+      "Trust-building content",
+    ],
+    outcome: "Content that looks like the business you have actually built â€” and gives viewers a reason to enquire.",
+    icon: "clapperboard",
+  },
+  {
+    slug: "founder-personal-branding",
+    path: "/services/founder-personal-branding",
+    name: "Founder & Personal Brand Content",
+    short: "Build familiarity and authority where appropriate. Entirely optional.",
+    description:
+      "People trust people before they trust a logo. Where it fits the business, founder-led content helps customers connect with the person behind the service â€” without becoming an influencer.",
+    includes: [
+      "Founder story",
+      "Industry experience",
+      "Opinions",
+      "Myth-busting",
+      "Educational Reels",
+      "Customer questions",
+      "Behind-the-scenes",
+      "Business values",
+      "Team stories",
+    ],
+    outcome: "Familiarity and trust that a faceless feed cannot build. Personal branding is optional â€” clients never need to become influencers.",
+    icon: "user-round",
+  },
+  {
+    slug: "enquiry-flow",
+    path: "/services/enquiry-flow",
+    name: "Enquiry Flow",
+    short: "Clearer pathways from content to customer enquiry.",
+    description:
+      "Content should lead somewhere. We design and refine the path from a Reel or post to a DM, WhatsApp message or booking â€” and track where enquiries come from.",
+    includes: [
+      "Clear CTAs",
+      "Instagram DM prompts",
+      "WhatsApp pathways",
+      "Booking pathways",
+      "Lead source tracking",
+      "Customer enquiry handoff",
+    ],
+    outcome: "Fewer dead ends. Viewers know exactly what to do next â€” and you know which content brought them.",
+    icon: "messages-square",
+  },
+  {
+    slug: "reporting",
+    path: "/services/reporting",
+    name: "Dashboard & Reporting",
+    short: "Understand what happened, what it means, and what changes next.",
+    description:
+      "A simple monthly report that explains the meaning behind the numbers: what was published, how it performed, which enquiries appeared, and what the next month's plan changes.",
+    includes: [
+      "Content published",
+      "Reach",
+      "Profile visits",
+      "Meaningful interactions",
+      "DMs",
+      "WhatsApp clicks",
+      "Enquiries",
+      "Bookings where available",
+      "What worked",
+      "What did not",
+      "Next month's actions",
+    ],
+    outcome: "Reporting you can actually use to make decisions â€” written in plain language.",
+    icon: "line-chart",
+  },
+];
+
+export function getService(slug: string): Service | undefined {
+  return services.find((s) => s.slug === slug);
+}
+
+
+===== components/ui/service-card.tsx =====
+import { Compass, Calendar, Clapperboard, UserRound, MessagesSquare, LineChart } from "lucide-react";
+import Link from "next/link";
+import type { Service } from "@/data/services";
+
+const icons: Record<string, React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>> = {
+  compass: Compass,
+  calendar: Calendar,
+  clapperboard: Clapperboard,
+  "user-round": UserRound,
+  "messages-square": MessagesSquare,
+  "line-chart": LineChart,
+};
+
+export function ServiceCard({ service, href }: { service: Service; href?: string }) {
+  const Icon = icons[service.icon] ?? Compass;
+  const link = href ?? service.path;
+  return (
+    <Link
+      href={link}
+      className="surface-card surface-card-hover group flex h-full flex-col p-6"
+    >
+      <span className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-accent-blue/25 bg-accent-blue/10 text-accent-cyan">
+        <Icon className="h-5 w-5" aria-hidden />
+      </span>
+      <h3 className="font-display text-lg font-semibold text-white">{service.name}</h3>
+      <p className="mt-2 flex-1 text-[15px] leading-relaxed text-slate-400">{service.short}</p>
+      <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-accent-cyan opacity-80 transition-opacity group-hover:opacity-100">
+        Learn more
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M3.5 8h9m0 0L8.75 4.25M12.5 8l-3.75 3.75"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+    </Link>
+  );
+}
+
+
+===== app/api/content/insights/route.ts =====
+
+import { NextResponse } from "next/server";
+import { getPublishedContent } from "@/lib/content";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const content = await getPublishedContent("insight");
+
+    return NextResponse.json(
+      {
+        insights: content.map((item) => ({
+          slug: item.slug,
+          title: item.title,
+          excerpt: item.excerpt,
+          body: item.body,
+          date: item.createdAt || item.updatedAt,
+        })),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("Public insights request failed:", error);
+
+    return NextResponse.json(
+      { error: "Unable to load insights." },
+      { status: 503 },
+    );
+  }
+}
+
+
+===== tests/admin-content.test.ts =====
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  isAdminAuthenticated: vi.fn(),
+  deleteContent: vi.fn(),
+  listContent: vi.fn(),
+  saveContent: vi.fn(),
+}));
+
+vi.mock("server-only", () => ({}));
+
+vi.mock("@/lib/auth", () => ({
+  isAdminAuthenticated: mocks.isAdminAuthenticated,
+}));
+
+vi.mock("@/lib/content", () => ({
+  deleteContent: mocks.deleteContent,
+  listContent: mocks.listContent,
+  saveContent: mocks.saveContent,
+}));
+
+import {
+  GET,
+  POST,
+  PATCH,
+  DELETE,
+} from "../app/api/admin/content/route";
+
+const validContent = {
+  type: "service",
+  slug: "social-media-management",
+  title: "Social Media Management",
+  excerpt: "Grow your brand online.",
+  body: "A complete social media management service.",
+  published: true,
+};
+
+function makeRequest(method: string, body?: unknown) {
+  return new Request("http://localhost/api/admin/content", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+describe("admin content API security and validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.isAdminAuthenticated.mockResolvedValue(true);
+    mocks.listContent.mockResolvedValue([]);
+    mocks.saveContent.mockResolvedValue("content-1");
+    mocks.deleteContent.mockResolvedValue(true);
+  });
+
+  it("rejects unauthenticated requests for all methods", async () => {
+    mocks.isAdminAuthenticated.mockResolvedValue(false);
+
+    const responses = await Promise.all([
+      GET(),
+      POST(makeRequest("POST", validContent)),
+      PATCH(makeRequest("PATCH", { id: "content-1", content: validContent })),
+      DELETE(makeRequest("DELETE", { id: "content-1" })),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([
+      401, 401, 401, 401,
+    ]);
+    expect(mocks.listContent).not.toHaveBeenCalled();
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+    expect(mocks.deleteContent).not.toHaveBeenCalled();
+  });
+
+  it("returns content for an authenticated admin", async () => {
+    mocks.listContent.mockResolvedValue([
+      { id: "content-1", ...validContent },
+    ]);
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).content).toHaveLength(1);
+  });
+
+  it("rejects malformed JSON", async () => {
+    const request = new Request("http://localhost/api/admin/content", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{invalid-json",
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid content fields and slug formats", async () => {
+    const invalidInputs = [
+      { ...validContent, type: "unknown" },
+      { ...validContent, slug: "Invalid Slug" },
+      { ...validContent, slug: "a".repeat(121) },
+      { ...validContent, title: "   " },
+      { ...validContent, title: "x".repeat(201) },
+      { ...validContent, excerpt: "x".repeat(1001) },
+      { ...validContent, body: "x".repeat(30001) },
+      { ...validContent, published: "true" },
+    ];
+
+    for (const input of invalidInputs) {
+      const response = await POST(makeRequest("POST", input));
+      expect(response.status).toBe(400);
+    }
+
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate slugs within the same content type", async () => {
+    mocks.listContent.mockResolvedValue([
+      { id: "existing-1", ...validContent },
+    ]);
+
+    const response = await POST(makeRequest("POST", validContent));
+
+    expect(response.status).toBe(409);
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("allows the same slug for a different content type", async () => {
+    mocks.listContent.mockResolvedValue([
+      { id: "existing-1", ...validContent },
+    ]);
+
+    const response = await POST(
+      makeRequest("POST", { ...validContent, type: "insight" }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.saveContent).toHaveBeenCalledOnce();
+  });
+
+  it("creates valid content", async () => {
+    const response = await POST(makeRequest("POST", validContent));
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ ok: true, id: "content-1" });
+    expect(mocks.saveContent).toHaveBeenCalledWith(validContent);
+  });
+
+  it("rejects invalid update requests", async () => {
+    const response = await PATCH(
+      makeRequest("PATCH", {
+        id: "content-1",
+        content: { ...validContent, slug: "../invalid" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when updating missing content", async () => {
+    mocks.saveContent.mockRejectedValue(new Error("CONTENT_NOT_FOUND"));
+
+    const response = await PATCH(
+      makeRequest("PATCH", { id: "missing-id", content: validContent }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when deleting missing content", async () => {
+    mocks.deleteContent.mockResolvedValue(false);
+
+    const response = await DELETE(
+      makeRequest("DELETE", { id: "missing-id" }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 503 when content storage fails", async () => {
+    mocks.listContent.mockRejectedValue(
+      new Error("Simulated database failure"),
+    );
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when deleting content fails", async () => {
+    mocks.deleteContent.mockRejectedValue(
+      new Error("Simulated database failure"),
+    );
+
+    const response = await DELETE(
+      makeRequest("DELETE", { id: "content-1" }),
+    );
+
+    expect(response.status).toBe(503);
+  });
+});
+
+
+===== package.json =====
+{
+  "name": "novaflo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Novaflo â€” social media growth partner website. Premium, conversion-focused, dynamic-ready.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "assets:logo": "node scripts/process-logo.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "lucide-react": "^0.474.0",
+    "next": "^15.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "resend": "^6.32.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.6",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "braces": "^3.0.3",
+    "postcss-selector-parser": "^7.1.6"
+  }
+}
+

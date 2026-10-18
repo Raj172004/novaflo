@@ -1,0 +1,1472 @@
+
+
+===== FILE: app/admin/content/page.tsx =====
+
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type { SiteContent, ContentType } from "@/lib/content";
+
+type ContentForm = {
+  type: ContentType;
+  slug: string;
+  title: string;
+  excerpt: string;
+  body: string;
+  published: boolean;
+};
+
+const emptyForm: ContentForm = {
+  type: "service",
+  slug: "",
+  title: "",
+  excerpt: "",
+  body: "",
+  published: false,
+};
+
+export default function AdminContentPage() {
+  const [items, setItems] = useState<SiteContent[]>([]);
+  const [form, setForm] = useState<ContentForm>(emptyForm);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [view, setView] = useState<"loading" | "ready" | "login" | "error">(
+    "loading",
+  );
+  const [password, setPassword] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch("/api/admin/content", { cache: "no-store" });
+
+      if (response.status === 401) {
+        setView("login");
+        return;
+      }
+
+      if (!response.ok) throw new Error("Unable to load content.");
+
+      const data = (await response.json()) as { content: SiteContent[] };
+      setItems(data.content);
+      setView("ready");
+    } catch {
+      setView("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function login(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!response.ok) {
+        setNotice("Sign-in failed. Check your password.");
+        return;
+      }
+
+      setPassword("");
+      await load();
+    } catch {
+      setNotice("Network error during sign-in.");
+    }
+  }
+
+  function edit(item: SiteContent) {
+    setEditingId(item.id);
+    setForm({
+      type: item.type,
+      slug: item.slug,
+      title: item.title,
+      excerpt: item.excerpt,
+      body: item.body,
+      published: item.published,
+    });
+    setNotice("");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(emptyForm);
+    setNotice("");
+  }
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/admin/content", {
+        method: editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          editingId ? { id: editingId, content: form } : form,
+        ),
+      });
+
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setNotice(result.error ?? "Unable to save content.");
+        return;
+      }
+
+      setNotice(editingId ? "Content updated." : "Content created.");
+      resetForm();
+      await load();
+    } catch {
+      setNotice("Network error while saving content.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(item: SiteContent) {
+    if (!window.confirm(`Delete "${item.title}" permanently?`)) return;
+
+    setNotice("");
+
+    try {
+      const response = await fetch("/api/admin/content", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+
+      const result = (await response.json()) as { error?: string };
+
+      if (!response.ok) {
+        setNotice(result.error ?? "Unable to delete content.");
+        return;
+      }
+
+      if (editingId === item.id) resetForm();
+
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setNotice("Content deleted.");
+    } catch {
+      setNotice("Network error while deleting content.");
+    }
+  }
+
+  if (view === "loading") {
+    return <main className="container-tight py-16">Loading content…</main>;
+  }
+
+  if (view === "login") {
+    return (
+      <main className="container-tight max-w-md py-16">
+        <h1 className="font-display text-2xl font-bold">Content sign in</h1>
+        <form onSubmit={login} className="mt-6 space-y-4">
+          <label className="block text-sm" htmlFor="content-password">
+            Admin password
+          </label>
+          <input
+            id="content-password"
+            type="password"
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            className="input-field"
+          />
+          <button className="w-full rounded-xl bg-brand-gradient px-5 py-3 font-semibold text-navy-950">
+            Sign in
+          </button>
+        </form>
+        {notice && <p role="alert" className="mt-4 text-sm">{notice}</p>}
+      </main>
+    );
+  }
+
+  if (view === "error") {
+    return (
+      <main className="container-tight py-16">
+        <p>Unable to load content.</p>
+        <button className="mt-4 rounded-lg border px-4 py-2" onClick={() => {
+          setView("loading");
+          void load();
+        }}>
+          Retry
+        </button>
+      </main>
+    );
+  }
+
+  return (
+    <main className="container-tight py-10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-display text-3xl font-bold">Content management</h1>
+          <p className="mt-2 text-sm text-slate-400">
+            Create and manage services and insights stored in Firestore.
+          </p>
+        </div>
+        <a className="rounded-lg border border-white/15 px-4 py-2 text-sm" href="/admin">
+          Back to leads
+        </a>
+      </div>
+
+      {notice && (
+        <p role="status" aria-live="polite" className="mt-5 rounded-lg border border-white/10 p-3 text-sm">
+          {notice}
+        </p>
+      )}
+
+      <form onSubmit={save} className="surface-card mt-6 space-y-4 p-5">
+        <h2 className="text-lg font-semibold">
+          {editingId ? "Edit content" : "Create content"}
+        </h2>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm">
+            Content type
+            <select
+              value={form.type}
+              onChange={(event) => setForm({
+                ...form,
+                type: event.target.value as ContentType,
+              })}
+              className="input-field mt-2"
+            >
+              <option value="service">Service</option>
+              <option value="insight">Insight / article</option>
+            </select>
+          </label>
+
+          <label className="text-sm">
+            URL slug
+            <input
+              required
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+              maxLength={120}
+              placeholder="social-media-strategy"
+              value={form.slug}
+              onChange={(event) => setForm({ ...form, slug: event.target.value })}
+              className="input-field mt-2"
+            />
+          </label>
+        </div>
+
+        <label className="block text-sm">
+          Title
+          <input
+            required
+            maxLength={200}
+            value={form.title}
+            onChange={(event) => setForm({ ...form, title: event.target.value })}
+            className="input-field mt-2"
+          />
+        </label>
+
+        <label className="block text-sm">
+          Summary
+          <textarea
+            maxLength={1000}
+            rows={2}
+            value={form.excerpt}
+            onChange={(event) => setForm({ ...form, excerpt: event.target.value })}
+            className="input-field mt-2"
+          />
+        </label>
+
+        <label className="block text-sm">
+          Body
+          <textarea
+            maxLength={30000}
+            rows={8}
+            value={form.body}
+            onChange={(event) => setForm({ ...form, body: event.target.value })}
+            className="input-field mt-2"
+            placeholder="Enter content. Plain text is supported in this first version."
+          />
+        </label>
+
+        <label className="flex items-center gap-3 text-sm">
+          <input
+            type="checkbox"
+            checked={form.published}
+            onChange={(event) => setForm({ ...form, published: event.target.checked })}
+          />
+          Published
+        </label>
+
+        <div className="flex flex-wrap gap-3">
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-xl bg-brand-gradient px-5 py-3 font-semibold text-navy-950 disabled:opacity-50"
+          >
+            {busy ? "Saving…" : editingId ? "Save changes" : "Create content"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} className="rounded-xl border border-white/15 px-5 py-3">
+              Cancel edit
+            </button>
+          )}
+        </div>
+      </form>
+
+      <section className="mt-10 space-y-3">
+        <h2 className="text-xl font-semibold">Saved content ({items.length})</h2>
+        {items.length === 0 ? (
+          <p className="surface-card p-6 text-sm text-slate-400">
+            No CMS content yet. Create a draft above.
+          </p>
+        ) : items.map((item) => (
+          <article key={item.id} className="surface-card flex flex-wrap items-center gap-4 p-4">
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{item.title}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {item.type} · /{item.slug} · {item.published ? "Published" : "Draft"}
+              </p>
+            </div>
+            <button type="button" onClick={() => edit(item)} className="rounded-lg border border-white/15 px-3 py-2 text-sm">
+              Edit
+            </button>
+            <button type="button" onClick={() => void remove(item)} className="rounded-lg border border-red-400/30 px-3 py-2 text-sm text-red-300">
+              Delete
+            </button>
+          </article>
+        ))}
+      </section>
+    </main>
+  );
+}
+
+
+
+===== FILE: app/api/admin/content/route.ts =====
+
+import { NextResponse } from "next/server";
+import { isAdminAuthenticated } from "@/lib/auth";
+import {
+  deleteContent,
+  listContent,
+  saveContent,
+  type ContentType,
+} from "@/lib/content";
+import { readJsonBody } from "../../../../lib/request-body";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+type ContentInput = {
+  type: ContentType;
+  slug: string;
+  title: string;
+  excerpt: string;
+  body: string;
+  published: boolean;
+};
+
+const validType = (value: unknown): value is ContentType =>
+  value === "service" || value === "insight";
+
+function validInput(value: unknown): value is ContentInput {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  const item = value as Record<string, unknown>;
+
+  return (
+    validType(item.type) &&
+    typeof item.slug === "string" &&
+    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(item.slug) &&
+    item.slug.length <= 120 &&
+    typeof item.title === "string" &&
+    item.title.trim().length > 0 &&
+    item.title.length <= 200 &&
+    typeof item.excerpt === "string" &&
+    item.excerpt.length <= 1000 &&
+    typeof item.body === "string" &&
+    item.body.length <= 30000 &&
+    typeof item.published === "boolean"
+  );
+}
+
+export async function GET() {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    return NextResponse.json({ content: await listContent() });
+  } catch (error) {
+    console.error("Admin content list failed:", error);
+    return NextResponse.json(
+      { error: "Unable to load content." },
+      { status: 503 },
+    );
+  }
+}
+
+export async function POST(request: Request) {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parsed = await readJsonBody(request);
+
+  if (!parsed.ok || !validInput(parsed.value)) {
+    return NextResponse.json(
+      { error: "Invalid content. Check all fields and the slug format." },
+      { status: 400 },
+    );
+  }
+
+  const input: ContentInput = parsed.value;
+
+  try {
+    const content = await listContent();
+    const duplicate = content.some(
+      (item) => item.type === input.type && item.slug === input.slug,
+    );
+
+    if (duplicate) {
+      return NextResponse.json(
+        { error: "That slug already exists for this content type." },
+        { status: 409 },
+      );
+    }
+
+    const id = await saveContent(input);
+    return NextResponse.json({ ok: true, id }, { status: 201 });
+  } catch (error) {
+    console.error("Admin content create failed:", error);
+    return NextResponse.json(
+      { error: "Unable to save content." },
+      { status: 503 },
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parsed = await readJsonBody(request);
+
+  if (
+    !parsed.ok ||
+    !parsed.value ||
+    typeof parsed.value !== "object" ||
+    Array.isArray(parsed.value)
+  ) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const payload = parsed.value as Record<string, unknown>;
+  const id = payload.id;
+
+  if (
+    typeof id !== "string" ||
+    !id.trim() ||
+    !validInput(payload.content)
+  ) {
+    return NextResponse.json(
+      { error: "A valid content ID and content object are required." },
+      { status: 400 },
+    );
+  }
+
+  const input: ContentInput = payload.content;
+
+  try {
+    const content = await listContent();
+    const duplicate = content.some(
+      (item) =>
+        item.id !== id &&
+        item.type === input.type &&
+        item.slug === input.slug,
+    );
+
+    if (duplicate) {
+      return NextResponse.json(
+        { error: "That slug already exists for this content type." },
+        { status: 409 },
+      );
+    }
+
+    await saveContent(input, id);
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === "CONTENT_NOT_FOUND") {
+      return NextResponse.json({ error: "Content not found." }, { status: 404 });
+    }
+
+    console.error("Admin content update failed:", error);
+    return NextResponse.json(
+      { error: "Unable to update content." },
+      { status: 503 },
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!(await isAdminAuthenticated())) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const parsed = await readJsonBody(request);
+
+  if (
+    !parsed.ok ||
+    !parsed.value ||
+    typeof parsed.value !== "object" ||
+    Array.isArray(parsed.value)
+  ) {
+    return NextResponse.json({ error: "Invalid request." }, { status: 400 });
+  }
+
+  const id = (parsed.value as Record<string, unknown>).id;
+
+  if (typeof id !== "string" || !id.trim()) {
+    return NextResponse.json(
+      { error: "A valid content ID is required." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const deleted = await deleteContent(id);
+
+    if (!deleted) {
+      return NextResponse.json({ error: "Content not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Admin content delete failed:", error);
+    return NextResponse.json(
+      { error: "Unable to delete content." },
+      { status: 503 },
+    );
+  }
+}
+
+
+
+===== FILE: app/api/content/insights/route.ts =====
+
+import { NextResponse } from "next/server";
+import { getPublishedContent } from "@/lib/content";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET() {
+  try {
+    const content = await getPublishedContent("insight");
+
+    return NextResponse.json(
+      {
+        insights: content.map((item) => ({
+          slug: item.slug,
+          title: item.title,
+          excerpt: item.excerpt,
+          body: item.body,
+          date: item.createdAt || item.updatedAt,
+        })),
+      },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      },
+    );
+  } catch (error) {
+    console.error("Public insights request failed:", error);
+
+    return NextResponse.json(
+      { error: "Unable to load insights." },
+      { status: 503 },
+    );
+  }
+}
+
+
+
+===== FILE: app/admin/page.tsx =====
+
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { LeadRecord } from "@/lib/leads";
+import { leadStatuses } from "@/lib/config";
+
+type View = "loading" | "login" | "ready" | "disabled" | "error";
+
+const statusStyles: Record<string, string> = {
+  new: "border-accent-blue/40 bg-accent-blue/10 text-accent-blue",
+  contacted: "border-accent-cyan/40 bg-accent-cyan/10 text-accent-cyan",
+  qualified: "border-violet-400/40 bg-violet-400/10 text-violet-300",
+  proposal: "border-amber-400/40 bg-amber-400/10 text-amber-300",
+  won: "border-emerald-400/40 bg-emerald-400/10 text-emerald-300",
+  lost: "border-white/20 bg-white/5 text-slate-400",
+};
+
+export default function AdminPage() {
+  const [view, setView] = useState<View>("loading");
+  const [password, setPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [leads, setLeads] = useState<LeadRecord[]>([]);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null);
+  const [notice, setNotice] = useState("");
+
+  const loadLeads = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/leads", {
+        cache: "no-store",
+      });
+
+      if (res.status === 401) {
+        setView("login");
+        return;
+      }
+
+      if (res.status === 403) {
+        setView("disabled");
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error("Failed to load leads.");
+      }
+
+      const data = (await res.json()) as {
+        leads?: LeadRecord[];
+      };
+
+      setLeads(data.leads ?? []);
+      setView("ready");
+    } catch {
+      setView("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadLeads();
+  }, [loadLeads]);
+
+  async function handleLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setLoginError("");
+
+    try {
+      const res = await fetch("/api/admin/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+
+        setLoginError(data.error ?? "Login failed.");
+        return;
+      }
+
+      setPassword("");
+      await loadLeads();
+    } catch {
+      setLoginError("Network error. Please try again.");
+    }
+  }
+
+  async function updateStatus(
+    id: string,
+    status: LeadRecord["status"]
+  ) {
+    if (updatingLeadId) return;
+
+    const currentLead = leads.find((lead) => lead.id === id);
+
+    if (!currentLead || currentLead.status === status) return;
+
+    const previousStatus = currentLead.status;
+
+    setNotice("");
+    setUpdatingLeadId(id);
+
+    // Optimistic update for a faster interface.
+    setLeads((prev) =>
+      prev.map((lead) =>
+        lead.id === id ? { ...lead, status } : lead
+      )
+    );
+
+    try {
+      const response = await fetch("/api/admin/leads", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id, status }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+
+        // Restore the previous status if the server rejects the update.
+        setLeads((prev) =>
+          prev.map((lead) =>
+            lead.id === id
+              ? { ...lead, status: previousStatus }
+              : lead
+          )
+        );
+
+        setNotice(data.error ?? "Could not save the status.");
+        return;
+      }
+
+      setNotice("Lead status saved successfully.");
+    } catch {
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === id
+            ? { ...lead, status: previousStatus }
+            : lead
+        )
+      );
+
+      setNotice("Network error. The status could not be confirmed.");
+    } finally {
+      setUpdatingLeadId(null);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/admin/login", {
+        method: "DELETE",
+      });
+    } finally {
+      setPassword("");
+      setLeads([]);
+      setView("login");
+      setNotice("");
+    }
+  }
+
+  const filtered = useMemo(() => {
+    return leads.filter((lead) => {
+      const matchesStatus =
+        statusFilter === "all" || lead.status === statusFilter;
+
+      const q = search.trim().toLowerCase();
+
+      const matchesSearch =
+        !q ||
+        [
+          lead.name,
+          lead.business,
+          lead.email,
+          lead.phone,
+          lead.industry,
+          lead.city,
+        ]
+          .filter(Boolean)
+          .some((value) =>
+            String(value).toLowerCase().includes(q)
+          );
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [leads, statusFilter, search]);
+
+  if (view === "loading") {
+    return (
+      <div className="container-tight flex min-h-[60vh] items-center justify-center">
+        <span className="h-8 w-8 animate-spin rounded-full border-2 border-accent-blue/30 border-t-accent-blue" />
+      </div>
+    );
+  }
+
+  if (view === "disabled") {
+    return (
+      <div className="container-tight flex min-h-[60vh] max-w-md flex-col items-center justify-center text-center">
+        <h1 className="font-display text-2xl font-semibold">
+          Admin is not enabled
+        </h1>
+
+        <p className="mt-3 text-[15px] leading-relaxed text-slate-400">
+          Set the{" "}
+          <code className="rounded bg-white/10 px-1.5 py-0.5 text-accent-cyan">
+            ADMIN_PASSWORD
+          </code>{" "}
+          environment variable and a strong{" "}
+          <code className="rounded bg-white/10 px-1.5 py-0.5 text-accent-cyan">
+            LEADS_SECRET
+          </code>{" "}
+          to activate the admin panel.
+        </p>
+      </div>
+    );
+  }
+
+  if (view === "login") {
+    return (
+      <div className="container-tight flex min-h-[60vh] max-w-sm flex-col justify-center">
+        <h1 className="font-display text-2xl font-semibold">
+          Admin sign in
+        </h1>
+
+        <p className="mt-2 text-sm text-slate-400">
+          Authorised team members only.
+        </p>
+
+        <form onSubmit={handleLogin} className="mt-6 space-y-4">
+          <div>
+            <label htmlFor="admin-password" className="field-label">
+              Password
+            </label>
+
+            <input
+              id="admin-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input-field"
+              autoComplete="current-password"
+              required
+            />
+          </div>
+
+          {loginError && (
+            <p className="field-error" role="alert">
+              {loginError}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            className="w-full rounded-xl bg-brand-gradient px-5 py-3 text-sm font-semibold text-navy-950 shadow-glow hover:brightness-110"
+          >
+            Sign in
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  if (view === "error") {
+    return (
+      <div className="container-tight flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+        <p className="text-slate-400">
+          Something went wrong loading the admin panel.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            setView("loading");
+            void loadLeads();
+          }}
+          className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const counts = leadStatuses.map((status) => ({
+    status,
+    count: leads.filter((lead) => lead.status === status).length,
+  }));
+
+  return (
+    <div className="container-tight py-12">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold">Leads</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {leads.length} total · private lead management
+          </p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <a
+            href="/admin/content"
+            className="rounded-lg border border-cyan-400/30 px-4 py-2 text-sm font-medium text-cyan-300 hover:bg-cyan-400/10"
+          >
+            Manage Content
+          </a>
+
+          <button
+            type="button"
+            onClick={() => void loadLeads()}
+            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white"
+          >
+            Refresh
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            className="rounded-lg border border-white/15 px-4 py-2 text-sm font-medium text-slate-300 hover:text-white"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+
+      {notice && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300"
+        >
+          {notice}
+        </p>
+      )}
+
+      {/* Pipeline summary */}
+      <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {counts.map(({ status, count }) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() =>
+              setStatusFilter(
+                statusFilter === status ? "all" : status
+              )
+            }
+            className={`surface-card p-3.5 text-left transition-colors ${
+              statusFilter === status
+                ? "border-accent-cyan/40"
+                : ""
+            }`}
+          >
+            <p className="text-2xl font-bold text-white">{count}</p>
+
+            <p className="mt-0.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {status}
+            </p>
+          </button>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search name, business, email, city..."
+          aria-label="Search leads"
+          className="input-field sm:max-w-sm"
+        />
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          aria-label="Filter by status"
+          className="input-field sm:max-w-[200px]"
+        >
+          <option value="all" className="bg-navy-850">
+            All statuses
+          </option>
+
+          {leadStatuses.map((status) => (
+            <option
+              key={status}
+              value={status}
+              className="bg-navy-850"
+            >
+              {status}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Lead list */}
+      <div className="mt-6 space-y-3">
+        {filtered.length === 0 ? (
+          <p className="surface-card p-8 text-center text-slate-400">
+            No leads found. Form submissions will appear here.
+          </p>
+        ) : (
+          filtered.map((lead) => (
+            <div key={lead.id} className="surface-card overflow-hidden">
+              <button
+                type="button"
+                onClick={() =>
+                  setExpanded(
+                    expanded === lead.id ? null : lead.id
+                  )
+                }
+                className="flex w-full flex-wrap items-center gap-3 p-4 text-left hover:bg-white/[0.02]"
+                aria-expanded={expanded === lead.id}
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-white">
+                    {lead.name} ·{" "}
+                    <span className="font-normal text-slate-300">
+                      {lead.business}
+                    </span>
+                  </p>
+
+                  <p className="mt-0.5 truncate text-sm text-slate-500">
+                    {lead.email} · {lead.phone}
+                    {lead.city ? ` · ${lead.city}` : ""}
+                  </p>
+                </div>
+
+                <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-300">
+                  {lead.type.replace("_", " ")}
+                </span>
+
+                <span
+                  className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+                    statusStyles[lead.status] ?? statusStyles.new
+                  }`}
+                >
+                  {lead.status}
+                </span>
+
+                <span className="text-xs text-slate-600">
+                  {new Date(lead.createdAt).toLocaleDateString()}
+                </span>
+              </button>
+
+              {expanded === lead.id && (
+                <div className="border-t border-white/[0.06] p-5">
+                  <dl className="grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
+                    {[
+                      ["Email", lead.email],
+                      ["Phone", lead.phone],
+                      ["Industry", lead.industry],
+                      ["City", lead.city],
+                      ["Instagram", lead.instagram],
+                      ["Preferred contact", lead.contactMethod],
+                      ["Source", lead.source],
+                      ["Landing page", lead.landingPage],
+                      [
+                        "UTM",
+                        Object.keys(lead.utm ?? {}).length
+                          ? JSON.stringify(lead.utm)
+                          : "â€”",
+                      ],
+                      [
+                        "Received",
+                        new Date(lead.createdAt).toLocaleString(),
+                      ],
+                    ].map(([label, value]) => (
+                      <div key={label}>
+                        <dt className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                          {label}
+                        </dt>
+
+                        <dd className="mt-0.5 break-words text-slate-300">
+                          {value ? String(value) : "â€”"}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  {(lead.challenge || lead.message || lead.subject) && (
+                    <div className="mt-4 rounded-xl border border-white/[0.07] bg-white/[0.02] p-4">
+                      {lead.subject && (
+                        <p className="text-sm text-slate-300">
+                          <span className="font-semibold text-slate-400">
+                            Subject:{" "}
+                          </span>
+                          {lead.subject}
+                        </p>
+                      )}
+
+                      {lead.challenge && (
+                        <p className="text-sm leading-relaxed text-slate-300">
+                          <span className="font-semibold text-slate-400">
+                            Challenge:{" "}
+                          </span>
+                          {lead.challenge}
+                        </p>
+                      )}
+
+                      {lead.message && (
+                        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-300">
+                          {lead.message}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Set status:
+                    </span>
+
+                    {leadStatuses.map((status) => (
+                      <button
+                        key={status}
+                        type="button"
+                        disabled={updatingLeadId !== null}
+                        onClick={() => void updateStatus(lead.id, status)}
+                        className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+                          lead.status === status
+                            ? statusStyles[status]
+                            : "border-white/10 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {updatingLeadId === lead.id
+                          ? "Saving..."
+                          : status}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+
+===== FILE: lib/firebase-admin.ts =====
+import "server-only";
+
+import { cert, getApps, initializeApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { readFileSync } from "node:fs";
+
+function getFirebaseAdminApp() {
+  const existingApp = getApps().find((app) => app.name === "[DEFAULT]");
+  if (existingApp) return existingApp;
+
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH;
+
+  let serviceAccount: Record<string, unknown>;
+
+  try {
+    if (serviceAccountJson?.trim()) {
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } else if (serviceAccountPath?.trim()) {
+      serviceAccount = JSON.parse(readFileSync(serviceAccountPath, "utf8"));
+    } else {
+      throw new Error(
+        "Configure FIREBASE_SERVICE_ACCOUNT_JSON or FIREBASE_SERVICE_ACCOUNT_PATH.",
+      );
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("Configure FIREBASE_SERVICE_ACCOUNT")
+    ) {
+      throw error;
+    }
+
+    throw new Error(
+      "Firebase Admin credentials could not be loaded. Check the JSON format and service-account file path.",
+    );
+  }
+
+  if (
+    typeof serviceAccount.project_id !== "string" ||
+    !serviceAccount.project_id.trim() ||
+    typeof serviceAccount.client_email !== "string" ||
+    !serviceAccount.client_email.trim() ||
+    typeof serviceAccount.private_key !== "string" ||
+    !serviceAccount.private_key.trim()
+  ) {
+    throw new Error(
+      "Firebase Admin credentials are missing project_id, client_email, or private_key.",
+    );
+  }
+
+  // Normalize private-key newlines supplied through environment variables.
+  const normalizedServiceAccount = {
+    ...serviceAccount,
+    private_key: serviceAccount.private_key.replace(/\\n/g, "\n"),
+  };
+
+  return initializeApp({
+    credential: cert(
+      normalizedServiceAccount as Parameters<typeof cert>[0],
+    ),
+  });
+}
+
+export const adminDb = getFirestore(getFirebaseAdminApp());
+
+
+
+===== FILE: tests/admin-content.test.ts =====
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  isAdminAuthenticated: vi.fn(),
+  deleteContent: vi.fn(),
+  listContent: vi.fn(),
+  saveContent: vi.fn(),
+}));
+
+vi.mock("server-only", () => ({}));
+
+vi.mock("@/lib/auth", () => ({
+  isAdminAuthenticated: mocks.isAdminAuthenticated,
+}));
+
+vi.mock("@/lib/content", () => ({
+  deleteContent: mocks.deleteContent,
+  listContent: mocks.listContent,
+  saveContent: mocks.saveContent,
+}));
+
+import {
+  GET,
+  POST,
+  PATCH,
+  DELETE,
+} from "../app/api/admin/content/route";
+
+const validContent = {
+  type: "service",
+  slug: "social-media-management",
+  title: "Social Media Management",
+  excerpt: "Grow your brand online.",
+  body: "A complete social media management service.",
+  published: true,
+};
+
+function makeRequest(method: string, body?: unknown) {
+  return new Request("http://localhost/api/admin/content", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+describe("admin content API security and validation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.isAdminAuthenticated.mockResolvedValue(true);
+    mocks.listContent.mockResolvedValue([]);
+    mocks.saveContent.mockResolvedValue("content-1");
+    mocks.deleteContent.mockResolvedValue(true);
+  });
+
+  it("rejects unauthenticated requests for all methods", async () => {
+    mocks.isAdminAuthenticated.mockResolvedValue(false);
+
+    const responses = await Promise.all([
+      GET(),
+      POST(makeRequest("POST", validContent)),
+      PATCH(makeRequest("PATCH", { id: "content-1", content: validContent })),
+      DELETE(makeRequest("DELETE", { id: "content-1" })),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([
+      401, 401, 401, 401,
+    ]);
+    expect(mocks.listContent).not.toHaveBeenCalled();
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+    expect(mocks.deleteContent).not.toHaveBeenCalled();
+  });
+
+  it("returns content for an authenticated admin", async () => {
+    mocks.listContent.mockResolvedValue([
+      { id: "content-1", ...validContent },
+    ]);
+
+    const response = await GET();
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).content).toHaveLength(1);
+  });
+
+  it("rejects malformed JSON", async () => {
+    const request = new Request("http://localhost/api/admin/content", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{invalid-json",
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects invalid content fields and slug formats", async () => {
+    const invalidInputs = [
+      { ...validContent, type: "unknown" },
+      { ...validContent, slug: "Invalid Slug" },
+      { ...validContent, slug: "a".repeat(121) },
+      { ...validContent, title: "   " },
+      { ...validContent, title: "x".repeat(201) },
+      { ...validContent, excerpt: "x".repeat(1001) },
+      { ...validContent, body: "x".repeat(30001) },
+      { ...validContent, published: "true" },
+    ];
+
+    for (const input of invalidInputs) {
+      const response = await POST(makeRequest("POST", input));
+      expect(response.status).toBe(400);
+    }
+
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("rejects duplicate slugs within the same content type", async () => {
+    mocks.listContent.mockResolvedValue([
+      { id: "existing-1", ...validContent },
+    ]);
+
+    const response = await POST(makeRequest("POST", validContent));
+
+    expect(response.status).toBe(409);
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("allows the same slug for a different content type", async () => {
+    mocks.listContent.mockResolvedValue([
+      { id: "existing-1", ...validContent },
+    ]);
+
+    const response = await POST(
+      makeRequest("POST", { ...validContent, type: "insight" }),
+    );
+
+    expect(response.status).toBe(201);
+    expect(mocks.saveContent).toHaveBeenCalledOnce();
+  });
+
+  it("creates valid content", async () => {
+    const response = await POST(makeRequest("POST", validContent));
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ ok: true, id: "content-1" });
+    expect(mocks.saveContent).toHaveBeenCalledWith(validContent);
+  });
+
+  it("rejects invalid update requests", async () => {
+    const response = await PATCH(
+      makeRequest("PATCH", {
+        id: "content-1",
+        content: { ...validContent, slug: "../invalid" },
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.saveContent).not.toHaveBeenCalled();
+  });
+
+  it("returns 404 when updating missing content", async () => {
+    mocks.saveContent.mockRejectedValue(new Error("CONTENT_NOT_FOUND"));
+
+    const response = await PATCH(
+      makeRequest("PATCH", { id: "missing-id", content: validContent }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 404 when deleting missing content", async () => {
+    mocks.deleteContent.mockResolvedValue(false);
+
+    const response = await DELETE(
+      makeRequest("DELETE", { id: "missing-id" }),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns 503 when content storage fails", async () => {
+    mocks.listContent.mockRejectedValue(
+      new Error("Simulated database failure"),
+    );
+
+    const response = await GET();
+
+    expect(response.status).toBe(503);
+  });
+
+  it("returns 503 when deleting content fails", async () => {
+    mocks.deleteContent.mockRejectedValue(
+      new Error("Simulated database failure"),
+    );
+
+    const response = await DELETE(
+      makeRequest("DELETE", { id: "content-1" }),
+    );
+
+    expect(response.status).toBe(503);
+  });
+});
+
+
+
+===== FILE: package.json =====
+{
+  "name": "novaflo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Novaflo — social media growth partner website. Premium, conversion-focused, dynamic-ready.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "assets:logo": "node scripts/process-logo.mjs",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "lucide-react": "^0.474.0",
+    "next": "^15.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "resend": "^6.32.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.6",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "postcss": "$postcss",
+    "braces": "^3.0.3",
+    "postcss-selector-parser": "^7.1.6"
+  }
+}
+

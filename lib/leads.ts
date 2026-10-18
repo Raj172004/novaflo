@@ -42,7 +42,7 @@ function toLeadRecord(
 
 export async function readLeads(): Promise<LeadRecord[]> {
   const snapshot = await leadsCollection().get();
-  return snapshot.docs.map((doc) => toLeadRecord(doc.id, doc.data()));
+  return snapshot.docs.map((doc: any) => toLeadRecord(doc.id, doc.data()));
 }
 
 export async function addLead(
@@ -142,3 +142,4 @@ export async function forwardToGoogleSheets(
     console.error("Google Sheets forwarding failed:", error);
   }
 }
+
